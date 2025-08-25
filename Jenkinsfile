@@ -2,26 +2,34 @@ pipeline {
     agent any
 
     environment {
-        DEPLOY_USER = 'ubuntu'         
-        DEPLOY_HOST = '54.165.172.232'  // Your server's IP
+        DEPLOY_USER = 'ubuntu'
+        DEPLOY_HOST = '54.165.172.232'   // Target server IP
         DEPLOY_DIR  = '/var/www/my-react-app'
     }
 
     tools {
-        nodejs 'NodeJS' // Make sure this NodeJS installation is configured in Jenkins
+        nodejs 'NodeJS'   // Ensure NodeJS is configured in Jenkins global tools
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
         stage('Checkout SCM') {
             steps {
-                // Checkout from your GitHub repo
                 git branch: 'main', url: 'https://github.com/dinesh12-pm/react-app.git'
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh '''
+                    echo "Installing dependencies..."
+                    npm install --legacy-peer-deps
+                '''
             }
         }
 
@@ -35,8 +43,9 @@ pipeline {
             steps {
                 sshagent(['deploy-server-ssh-key']) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST 'rm -rf $DEPLOY_DIR/*'
-                        scp -r build/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/
+                        echo "Deploying to server..."
+                        ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST 'mkdir -p $DEPLOY_DIR && rm -rf $DEPLOY_DIR/*'
+                        scp -o StrictHostKeyChecking=no -r build/* $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/
                     """
                 }
             }
@@ -44,11 +53,11 @@ pipeline {
     }
 
     post {
-        success {
-            echo "Build and deployment successful!"
-        }
         failure {
-            echo "Pipeline failed!"
+            echo "❌ Build or Deploy failed!"
+        }
+        success {
+            echo "✅ Deployment successful to $DEPLOY_HOST"
         }
     }
 }
